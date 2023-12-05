@@ -1,0 +1,15 @@
+menu "Sensor Configuration"
+
+    config BROKER_URL
+        string "Broker URL"
+        default "mqtt://localhost:1883"
+        help
+            URL of the broker to connect to
+
+    config MESSAGE_PERIOD
+        int "Message Period"
+        default 10
+        help
+            Number of seconds between consecutive messages
+
+endmenu

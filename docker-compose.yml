@@ -1,0 +1,63 @@
+version: '3.8'
+
+services:
+  mosquitto:
+    image: eclipse-mosquitto:2.0.18
+    ports:
+      - 1883:1883
+    volumes:
+      - ./mosquitto/config:/mosquitto/config
+      - mosquitto-data:/mosquitto/data
+      - mosquitto-logs:/mosquitto/log
+    networks:
+      - mosquitto
+
+  api:
+    build:
+      context: ./api
+    depends_on:
+      - db
+    restart: on-failure
+    container_name: api
+    environment:
+      - DATABASE_URL=jdbc:postgresql://db:5432/database
+      - DATABASE_USERNAME=postgres
+      - DATABASE_PASSWORD=postgres
+      - SPRING_PROFILES_ACTIVE=default
+    ports:
+      - "8080:8080"
+    volumes:
+      - api-data:/tmp
+      - api-logs:/var/log
+
+  db:
+    image: postgres:15.5-alpine3.18
+    restart: unless-stopped
+    container_name: db
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_DB=database
+    ports:
+      - "5432:5432"
+    volumes:
+      - db-data:/var/lib/postgresql/data
+
+volumes:
+  mosquitto-conf:
+    driver: local
+  mosquitto-data:
+    driver: local
+  mosquitto-logs:
+    driver: local
+  api-data:
+    driver: local
+  api-logs:
+    driver: local
+  db-data:
+    driver: local
+
+networks:
+  mosquitto:
+    name: mosquitto
+    driver: bridge

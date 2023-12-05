@@ -1,0 +1,30 @@
+-- db/migration/V1__create_battery_reading_table.sql
+
+CREATE TABLE batteries (
+   battery_id SERIAL PRIMARY KEY,
+   state INTEGER NOT NULL,
+   chg_enable BOOLEAN NOT NULL,
+   dis_enable BOOLEAN NOT NULL,
+   connected_cells INTEGER NOT NULL,
+   cell_voltages FLOAT[] NOT NULL,
+   cell_voltage_max FLOAT NOT NULL,
+   cell_voltage_min FLOAT NOT NULL,
+   cell_voltage_avg FLOAT NOT NULL,
+   pack_voltage FLOAT NOT NULL,
+   stack_voltage FLOAT NOT NULL,
+   pack_current FLOAT NOT NULL,
+   bat_temps FLOAT[] NOT NULL,
+   bat_temp_max FLOAT NOT NULL,
+   bat_temp_min FLOAT NOT NULL,
+   bat_temp_avg FLOAT NOT NULL,
+   mosfet_temp FLOAT NOT NULL,
+   ic_temp FLOAT NOT NULL,
+   mcu_temp FLOAT NOT NULL,
+   is_full BOOLEAN NOT NULL,
+   is_empty BOOLEAN NOT NULL,
+   soc FLOAT NOT NULL,
+   balancing_status BIGINT NOT NULL,
+   no_idle_timestamp TIMESTAMP NOT NULL,
+   error_flags BIGINT NOT NULL,
+   timestamp TIMESTAMP NOT NULL
+);
