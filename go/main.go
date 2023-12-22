@@ -80,7 +80,7 @@ func initLogger() {
 func setupPostgres(connString string) *pgxpool.Pool {
 	pool, err := pgxpool.New(context.Background(), connString)
 	if err != nil {
-		logger.Fatal(err)
+		log.Fatal(err)
 	}
 
 	return pool
@@ -90,7 +90,7 @@ func setupMQTTClient(brokerURL string) mqtt.Client {
 	opts := mqtt.NewClientOptions().AddBroker(brokerURL)
 	client := mqtt.NewClient(opts)
 	if token := client.Connect(); token.Wait() && token.Error() != nil {
-		logger.Fatal(token.Error())
+		log.Fatal(token.Error())
 	}
 
 	tokenBattery := client.Subscribe(batteryTopic, 0, func(client mqtt.Client, msg mqtt.Message) {
@@ -98,7 +98,7 @@ func setupMQTTClient(brokerURL string) mqtt.Client {
 	})
 
 	if tokenBattery.Wait() && tokenBattery.Error() != nil {
-		logger.Fatal(tokenBattery.Error())
+		log.Fatal(tokenBattery.Error())
 	}
 
 	tokenLocation := client.Subscribe(locationTopic, 0, func(client mqtt.Client, msg mqtt.Message) {
@@ -106,26 +106,26 @@ func setupMQTTClient(brokerURL string) mqtt.Client {
 	})
 
 	if tokenLocation.Wait() && tokenLocation.Error() != nil {
-		logger.Fatal(tokenLocation.Error())
+		log.Fatal(tokenLocation.Error())
 	}
 
 	return client
 }
 
 func handleBatteryMessage(payload []byte) {
-	logger.Printf("JSON payload: %+v\n", string(payload))
+	log.Printf("JSON payload: %+v\n", string(payload))
 
 	var batteryData BatteryData
 	err := json.Unmarshal(payload, &batteryData)
 	if err != nil {
-		logger.Println("Error parsing JSON payload (battery):", err)
+		log.Println("Error parsing JSON payload (battery):", err)
 		return
 	}
-	logger.Printf("Parsed JSON payload (battery): %+v\n", batteryData)
+	log.Printf("Parsed JSON payload (battery): %+v\n", batteryData)
 
 	tx, err := dbpool.Begin(context.Background())
 	if err != nil {
-		logger.Println("Error beginning PostgreSQL transaction (battery):", err)
+		log.Println("Error beginning PostgreSQL transaction (battery):", err)
 		return
 	}
 	defer tx.Rollback(context.Background())
@@ -156,7 +156,7 @@ func handleBatteryMessage(payload []byte) {
 		batteryData.NoIdleTimestamp, batteryData.Timestamp,
 	).Scan(&batteryID)
 	if err != nil {
-		logger.Println("Error inserting data into PostgreSQL (battery):", err)
+		log.Println("Error inserting data into PostgreSQL (battery):", err)
 		return
 	}
 
@@ -167,7 +167,7 @@ func handleBatteryMessage(payload []byte) {
     `
 		_, err := tx.Exec(context.Background(), query, temp, i+1, batteryID)
 		if err != nil {
-			logger.Printf("Error executing query (battery temps): %s\nQuery: %s\n", err, query)
+			log.Printf("Error executing query (battery temps): %s\nQuery: %s\n", err, query)
 			return
 		}
 	}
@@ -179,27 +179,27 @@ func handleBatteryMessage(payload []byte) {
     `
 		_, err := tx.Exec(context.Background(), query, voltage, i+1, batteryID)
 		if err != nil {
-			logger.Printf("Error executing query (battery voltages): %s\nQuery: %s\n", err, query)
+			log.Printf("Error executing query (battery voltages): %s\nQuery: %s\n", err, query)
 			return
 		}
 	}
 
 	err = tx.Commit(context.Background())
 	if err != nil {
-		logger.Println("Error committing PostgreSQL transaction (battery):", err)
+		log.Println("Error committing PostgreSQL transaction (battery):", err)
 		return
 	}
 }
 
 func handleLocationMessage(payload []byte) {
-	logger.Printf("JSON payload: %+v\n", string(payload))
+	log.Printf("JSON payload: %+v\n", string(payload))
 	var locationData LocationData
 	err := json.Unmarshal(payload, &locationData)
 	if err != nil {
-		logger.Println("Error parsing JSON payload (location):", err)
+		log.Println("Error parsing JSON payload (location):", err)
 		return
 	}
-	logger.Printf("Parsed JSON payload (battery): %+v\n", locationData)
+	log.Printf("Parsed JSON payload (battery): %+v\n", locationData)
 
 	_, err = dbpool.Exec(context.Background(), `
 		INSERT INTO `+locationTable+` (latitude, longitude, timestamp)
@@ -207,17 +207,17 @@ func handleLocationMessage(payload []byte) {
 	`, locationData.Latitude, locationData.Longitude, locationData.Timestamp)
 
 	if err != nil {
-		logger.Println("Error inserting data into PostgreSQL (location):", err)
+		log.Println("Error inserting data into PostgreSQL (location):", err)
 		return
 	}
 }
 
 func main() {
-	initLogger()
-	defer logFile.Close()
+	// initLogger()
+	// defer logFile.Close()
 
 	mqttBroker := getEnvVar("MQTT_BROKER", "tcp://localhost:1883")
-	postgresConn := getEnvVar("POSTGRES_CONN", "host=localhost user=postgres password=postgres dbname=database sslmode=disable")
+	postgresConn := getEnvVar("DATABASE_URL", "host=localhost user=postgres password=postgres dbname=database sslmode=disable")
 
 	dbpool = setupPostgres(postgresConn)
 	defer dbpool.Close()
