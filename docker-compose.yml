@@ -20,7 +20,7 @@ services:
     restart: on-failure
     container_name: api
     environment:
-      - DATABASE_URL=jdbc:postgresql://db:5432/database
+      - DATABASE_URL=jdbc:postgresql://db:5432/postgres
       - DATABASE_USERNAME=postgres
       - DATABASE_PASSWORD=postgres
       - SPRING_PROFILES_ACTIVE=default
@@ -37,7 +37,7 @@ services:
     environment:
       - POSTGRES_USER=postgres
       - POSTGRES_PASSWORD=postgres
-      - POSTGRES_DB=database
+      - POSTGRES_DB=postgres
     ports:
       - "5432:5432"
     volumes:

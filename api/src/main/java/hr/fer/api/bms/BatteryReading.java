@@ -6,6 +6,7 @@ import lombok.NoArgsConstructor;
 
 import jakarta.persistence.*;
 import java.time.Instant;
+import java.util.List;
 
 @Entity
 @Table(name = "batteries")
@@ -25,8 +26,10 @@ public class BatteryReading {
     private int connectedCells;
 
     @ElementCollection
+    @CollectionTable(name = "battery_reading_cell_voltages", joinColumns = @JoinColumn(name = "battery_reading_battery_id"))
+    @OrderColumn(name = "cell_voltages_order")
     @Column(name = "cell_voltage")
-    private float[] cellVoltages;
+    private List<Float> cellVoltages;
 
     private float cellVoltageMax;
     private float cellVoltageMin;
@@ -37,8 +40,10 @@ public class BatteryReading {
     private float packCurrent;
 
     @ElementCollection
+    @CollectionTable(name = "battery_reading_bat_temps", joinColumns = @JoinColumn(name = "battery_reading_battery_id"))
+    @OrderColumn(name = "bat_temps_order")
     @Column(name = "bat_temps")
-    private float[] batTemps;
+    private List<Float> batTemps;
 
     private float batTempMax;
     private float batTempMin;

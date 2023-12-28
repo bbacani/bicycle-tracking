@@ -1,0 +1,23 @@
+# fly.toml app configuration file generated for bicycle-tracking-broker on 2023-12-28T18:50:40+01:00
+#
+# See https://fly.io/docs/reference/configuration/ for information about how to use this file.
+#
+
+app = "bicycle-tracking-broker"
+primary_region = "cdg"
+
+[build]
+
+[[services]]
+  internal_port = 1883
+  protocol = "tcp"
+  processes = ["app"]
+
+  [[services.ports]]
+    port = 1883
+    handlers = [ ]
+
+[[vm]]
+  cpu_kind = "shared"
+  cpus = 1
+  memory_mb = 256
