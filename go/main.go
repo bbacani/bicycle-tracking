@@ -86,8 +86,11 @@ func setupPostgres(connString string) *pgxpool.Pool {
 	return pool
 }
 
-func setupMQTTClient(brokerURL string) mqtt.Client {
+func setupMQTTClient(brokerURL string, brokerUsername string, brokerPassword string) mqtt.Client {
 	opts := mqtt.NewClientOptions().AddBroker(brokerURL)
+    opts.SetUsername(brokerUsername)
+    opts.SetPassword(brokerPassword)
+	opts.SetClientID("go_mqtt_aggregator")
 	client := mqtt.NewClient(opts)
 	if token := client.Connect(); token.Wait() && token.Error() != nil {
 		log.Fatal(token.Error())
@@ -217,12 +220,14 @@ func main() {
 	// defer logFile.Close()
 
 	mqttBroker := getEnvVar("MQTT_BROKER", "tcp://localhost:1883")
+	mqttUsername := getEnvVar("MQTT_USERNAME", "username")
+	mqttPassword := getEnvVar("MQTT_PASSWORD", "password")
 	postgresConn := getEnvVar("DATABASE_URL", "host=localhost user=postgres password=postgres dbname=database sslmode=disable")
 
 	dbpool = setupPostgres(postgresConn)
 	defer dbpool.Close()
 
-	client := setupMQTTClient(mqttBroker)
+	client := setupMQTTClient(mqttBroker, mqttUsername, mqttPassword)
 	defer client.Disconnect(250)
 
 	log.Println("Press Ctrl+C to exit")
