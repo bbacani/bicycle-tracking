@@ -17,6 +17,11 @@ primary_region = "cdg"
     port = 1883
     handlers = [ ]
 
+  [services.concurrency]
+    type = "connections"
+    hard_limit = 1000
+    soft_limit = 1000
+
 [[vm]]
   cpu_kind = "shared"
   cpus = 1
