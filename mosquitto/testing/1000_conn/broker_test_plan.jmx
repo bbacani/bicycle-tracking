@@ -16,7 +16,7 @@
           <stringProp name="LoopController.loops">1</stringProp>
           <boolProp name="LoopController.continue_forever">false</boolProp>
         </elementProp>
-        <stringProp name="ThreadGroup.num_threads">512</stringProp>
+        <stringProp name="ThreadGroup.num_threads">1000</stringProp>
         <stringProp name="ThreadGroup.ramp_time">1</stringProp>
         <boolProp name="ThreadGroup.delayedStart">false</boolProp>
         <boolProp name="ThreadGroup.scheduler">false</boolProp>
@@ -29,7 +29,7 @@
           <stringProp name="mqtt.server">149.248.198.60</stringProp>
           <stringProp name="mqtt.port">1883</stringProp>
           <stringProp name="mqtt.version">3.1</stringProp>
-          <stringProp name="mqtt.conn_timeout">10</stringProp>
+          <stringProp name="mqtt.conn_timeout">60</stringProp>
           <stringProp name="mqtt.protocol">TCP</stringProp>
           <stringProp name="mqtt.ws_path"></stringProp>
           <boolProp name="mqtt.dual_ssl_authentication">false</boolProp>
@@ -40,8 +40,8 @@
           <stringProp name="mqtt.client_id_prefix">conn_</stringProp>
           <boolProp name="mqtt.client_id_suffix">true</boolProp>
           <stringProp name="mqtt.conn_keep_alive">300</stringProp>
-          <stringProp name="mqtt.conn_attampt_max">0</stringProp>
-          <stringProp name="mqtt.reconn_attampt_max">0</stringProp>
+          <stringProp name="mqtt.conn_attampt_max">3</stringProp>
+          <stringProp name="mqtt.reconn_attampt_max">3</stringProp>
           <stringProp name="mqtt.conn_clean_session">true</stringProp>
         </net.xmeter.samplers.ConnectSampler>
         <hashTree/>
