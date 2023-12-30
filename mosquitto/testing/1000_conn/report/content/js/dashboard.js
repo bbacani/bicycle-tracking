@@ -133,7 +133,7 @@ $(document).ready(function() {
         widgets: ['zebra']
     });
 
-    var data = {"OkPercent": 66.66666666666667, "KoPercent": 33.333333333333336};
+    var data = {"OkPercent": 100.0, "KoPercent": 0.0};
     var dataset = [
         {
             "label" : "FAIL",
@@ -173,7 +173,7 @@ $(document).ready(function() {
     });
 
     // Creates APDEX table
-    createTable($("#apdexTable"), {"supportsControllersDiscrimination": true, "overall": {"data": [0.6430121527777778, 500, 1500, "Total"], "isController": false}, "titles": ["Apdex", "T (Toleration threshold)", "F (Frustration threshold)", "Label"], "items": [{"data": [0.599609375, 500, 1500, "MQTT Connect"], "isController": false}, {"data": [0.6666666666666666, 500, 1500, "MQTT DisConnect"], "isController": false}, {"data": [0.6627604166666666, 500, 1500, "MQTT Pub Sampler"], "isController": false}]}, function(index, item){
+    createTable($("#apdexTable"), {"supportsControllersDiscrimination": true, "overall": {"data": [0.9986979166666666, 500, 1500, "Total"], "isController": false}, "titles": ["Apdex", "T (Toleration threshold)", "F (Frustration threshold)", "Label"], "items": [{"data": [0.99609375, 500, 1500, "MQTT Connect"], "isController": false}, {"data": [1.0, 500, 1500, "MQTT DisConnect"], "isController": false}, {"data": [1.0, 500, 1500, "MQTT Pub Sampler"], "isController": false}]}, function(index, item){
         switch(index){
             case 0:
                 item = item.toFixed(3);
@@ -187,7 +187,7 @@ $(document).ready(function() {
     }, [[0, 0]], 3);
 
     // Create statistics table
-    createTable($("#statisticsTable"), {"supportsControllersDiscrimination": true, "overall": {"data": ["Total", 2304, 768, 33.333333333333336, 1247.7677951388894, 0, 10216, 85.0, 10002.0, 10006.0, 10049.449999999997, 214.72506989748368, 5.149114631873252, 3.3550792171481825], "isController": false}, "titles": ["Label", "#Samples", "FAIL", "Error %", "Average", "Min", "Max", "Median", "90th pct", "95th pct", "99th pct", "Transactions/s", "Received", "Sent"], "items": [{"data": ["MQTT Connect", 768, 256, 33.333333333333336, 3617.3333333333344, 178, 10216, 473.0, 10009.0, 10018.55, 10162.31, 71.57502329916123, 1.7940354147250699, 0.0], "isController": false}, {"data": ["MQTT DisConnect", 768, 256, 33.333333333333336, 61.37369791666659, 0, 422, 58.0, 95.10000000000002, 111.54999999999995, 399.0, 74.81734047735023, 1.2420847540185094, 0.0], "isController": false}, {"data": ["MQTT Pub Sampler", 768, 256, 33.333333333333336, 64.5963541666666, 0, 1010, 60.0, 104.0, 118.54999999999995, 405.9599999999991, 74.18139669660968, 2.2457258765575197, 3.477252970153579], "isController": false}]}, function(index, item){
+    createTable($("#statisticsTable"), {"supportsControllersDiscrimination": true, "overall": {"data": ["Total", 1536, 0, 0.0, 90.25846354166674, 39, 1093, 64.0, 151.0, 193.29999999999973, 315.88999999999965, 912.1140142517816, 12.470308788598576, 21.37767220902613], "isController": false}, "titles": ["Label", "#Samples", "FAIL", "Error %", "Average", "Min", "Max", "Median", "90th pct", "95th pct", "99th pct", "Transactions/s", "Received", "Sent"], "items": [{"data": ["MQTT Connect", 512, 0, 0.0, 157.0097656250001, 98, 1093, 132.0, 252.7, 295.34999999999997, 337.96000000000004, 319.8001249219238, 3.4353529044347284, 0.0], "isController": false}, {"data": ["MQTT DisConnect", 512, 0, 0.0, 58.17382812499999, 39, 84, 57.0, 71.0, 74.0, 79.87, 383.23353293413174, 4.116766467065868, 0.0], "isController": false}, {"data": ["MQTT Pub Sampler", 512, 0, 0.0, 55.59179687499999, 39, 87, 55.0, 68.0, 71.0, 81.87, 378.41832963784185, 7.390983000739098, 26.607538802660756], "isController": false}]}, function(index, item){
         switch(index){
             // Errors pct
             case 3:
@@ -217,7 +217,7 @@ $(document).ready(function() {
     }, [[0, 0]], 0, summaryTableHeader);
 
     // Create error table
-    createTable($("#errorsTable"), {"supportsControllersDiscrimination": false, "titles": ["Type of error", "Number of errors", "% in errors", "% in all samples"], "items": [{"data": ["500/Connection not found.", 256, 33.333333333333336, 11.11111111111111], "isController": false}, {"data": ["502/Failed to establish Connection null.", 256, 33.333333333333336, 11.11111111111111], "isController": false}, {"data": ["500/Publish: Connection not found.", 256, 33.333333333333336, 11.11111111111111], "isController": false}]}, function(index, item){
+    createTable($("#errorsTable"), {"supportsControllersDiscrimination": false, "titles": ["Type of error", "Number of errors", "% in errors", "% in all samples"], "items": []}, function(index, item){
         switch(index){
             case 2:
             case 3:
@@ -228,7 +228,7 @@ $(document).ready(function() {
     }, [[1, 1]]);
 
         // Create top5 errors by sampler
-    createTable($("#top5ErrorsBySamplerTable"), {"supportsControllersDiscrimination": false, "overall": {"data": ["Total", 2304, 768, "500/Connection not found.", 256, "502/Failed to establish Connection null.", 256, "500/Publish: Connection not found.", 256, "", "", "", ""], "isController": false}, "titles": ["Sample", "#Samples", "#Errors", "Error", "#Errors", "Error", "#Errors", "Error", "#Errors", "Error", "#Errors", "Error", "#Errors"], "items": [{"data": ["MQTT Connect", 768, 256, "502/Failed to establish Connection null.", 256, "", "", "", "", "", "", "", ""], "isController": false}, {"data": ["MQTT DisConnect", 768, 256, "500/Connection not found.", 256, "", "", "", "", "", "", "", ""], "isController": false}, {"data": ["MQTT Pub Sampler", 768, 256, "500/Publish: Connection not found.", 256, "", "", "", "", "", "", "", ""], "isController": false}]}, function(index, item){
+    createTable($("#top5ErrorsBySamplerTable"), {"supportsControllersDiscrimination": false, "overall": {"data": ["Total", 1536, 0, "", "", "", "", "", "", "", "", "", ""], "isController": false}, "titles": ["Sample", "#Samples", "#Errors", "Error", "#Errors", "Error", "#Errors", "Error", "#Errors", "Error", "#Errors", "Error", "#Errors"], "items": [{"data": [], "isController": false}, {"data": [], "isController": false}, {"data": [], "isController": false}]}, function(index, item){
         return item;
     }, [[0, 0]], 0);
 
