@@ -30,6 +30,7 @@
 #include "sdkconfig.h"
 
 #include "cJSON.h"
+#include "driver/gpio.h"
 
 #if defined(CONFIG_EXAMPLE_FLOW_CONTROL_NONE)
 #define EXAMPLE_FLOW_CONTROL ESP_MODEM_FLOW_CONTROL_NONE
@@ -411,6 +412,10 @@ static void mqtt_app_start(void)
     ESP_LOGI(TAG, "Waiting for MQTT data");
 }
 
+#define MODEM_RST 5
+#define MODEM_PWKEY 4
+#define MODEM_POWER_ON 23
+
 void app_main(void)
 {
     ESP_LOGI(TAG, "[APP] Startup..");
@@ -431,6 +436,20 @@ void app_main(void)
     ESP_ERROR_CHECK(esp_event_loop_create_default());
     ESP_ERROR_CHECK(esp_event_handler_register(IP_EVENT, ESP_EVENT_ANY_ID, &on_ip_event, NULL));
     ESP_ERROR_CHECK(esp_event_handler_register(NETIF_PPP_STATUS, ESP_EVENT_ANY_ID, &on_ppp_changed, NULL));
+
+    gpio_config_t io_conf;
+    io_conf.intr_type = GPIO_INTR_DISABLE;
+    io_conf.mode = GPIO_MODE_OUTPUT;
+    io_conf.pin_bit_mask = (1 << MODEM_RST) | (1 << MODEM_PWKEY) | (1 << MODEM_POWER_ON);
+    io_conf.pull_down_en = 0;
+    io_conf.pull_up_en = 0;
+    gpio_config(&io_conf);
+
+    gpio_set_level(MODEM_PWKEY, 0);
+    gpio_set_level(MODEM_RST, 1);
+    gpio_set_level(MODEM_POWER_ON, 1);
+
+    vTaskDelay(15000 / portTICK_PERIOD_MS);
 
     // Synchronize time with NTP server
     // obtain_time();
@@ -554,9 +573,6 @@ void app_main(void)
     /* Wait for IP address */
     ESP_LOGI(TAG, "Waiting for IP address");
     xEventGroupWaitBits(event_group, CONNECT_BIT, pdFALSE, pdFALSE, portMAX_DELAY);
-    /* Wait for establishing connection */
-    ESP_LOGI(TAG, "Waiting for establishing connection");
-    xEventGroupWaitBits(event_group, GOT_DATA_BIT, pdFALSE, pdFALSE, portMAX_DELAY);
 
     /* Start MQTT client */
     ESP_LOGI(TAG, "Starting MQTT client");
@@ -564,4 +580,8 @@ void app_main(void)
 
     // Create the MQTT publish task
     xTaskCreate(&mqtt_publish_task, "mqtt_publish_task", 4096, NULL, 5, NULL);
+
+    /* Wait for establishing connection */
+    ESP_LOGI(TAG, "Waiting for establishing connection");
+    xEventGroupWaitBits(event_group, GOT_DATA_BIT, pdFALSE, pdFALSE, portMAX_DELAY);
 }
