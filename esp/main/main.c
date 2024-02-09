@@ -3,28 +3,50 @@
 #include <stdlib.h>
 #include <stddef.h>
 #include <string.h>
-#include "esp_wifi.h"
+// #include "esp_wifi.h"
 #include "esp_system.h"
 #include "nvs_flash.h"
 #include "esp_event.h"
 #include "esp_netif.h"
+#include "esp_netif_ppp.h"
+#include "mqtt_client.h"
+#include "esp_modem_api.h"
 #include "protocol_examples_common.h"
 
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "freertos/semphr.h"
 #include "freertos/queue.h"
+#include "freertos/event_groups.h"
 
 #include "lwip/sockets.h"
 #include "lwip/dns.h"
 #include "lwip/netdb.h"
 
 #include "esp_log.h"
-#include "mqtt_client.h"
 
 #include "esp_sntp.h"
 
+#include "sdkconfig.h"
+
 #include "cJSON.h"
+#include "driver/gpio.h"
+
+#if defined(CONFIG_EXAMPLE_FLOW_CONTROL_NONE)
+#define EXAMPLE_FLOW_CONTROL ESP_MODEM_FLOW_CONTROL_NONE
+#elif defined(CONFIG_EXAMPLE_FLOW_CONTROL_SW)
+#define EXAMPLE_FLOW_CONTROL ESP_MODEM_FLOW_CONTROL_SW
+#elif defined(CONFIG_EXAMPLE_FLOW_CONTROL_HW)
+#define EXAMPLE_FLOW_CONTROL ESP_MODEM_FLOW_CONTROL_HW
+#endif
+
+static EventGroupHandle_t event_group = NULL;
+static const int CONNECT_BIT = BIT0;
+static const int GOT_DATA_BIT = BIT2;
+
+#ifdef CONFIG_EXAMPLE_MODEM_DEVICE_CUSTOM
+esp_err_t esp_modem_get_time(esp_modem_dce_t *dce_wrap, char *p_time);
+#endif
 
 #define TOPIC_BATTERY "/bicycle/battery-status"
 #define TOPIC_GPS "/bicycle/gps-coordinates"
@@ -329,6 +351,54 @@ static void mqtt_event_handler(void *handler_args, esp_event_base_t base, int32_
     }
 }
 
+static void on_ppp_changed(void *arg, esp_event_base_t event_base, int32_t event_id, void *event_data)
+{
+    ESP_LOGI(TAG, "PPP state changed event %" PRIu32, event_id);
+    if (event_id == NETIF_PPP_ERRORUSER)
+    {
+        /* User interrupted event from esp-netif */
+        esp_netif_t **p_netif = event_data;
+        ESP_LOGI(TAG, "User interrupted event from netif:%p", *p_netif);
+    }
+}
+
+static void on_ip_event(void *arg, esp_event_base_t event_base, int32_t event_id, void *event_data)
+{
+    ESP_LOGD(TAG, "IP event! %" PRIu32, event_id);
+    if (event_id == IP_EVENT_PPP_GOT_IP)
+    {
+        esp_netif_dns_info_t dns_info;
+
+        ip_event_got_ip_t *event = (ip_event_got_ip_t *)event_data;
+        esp_netif_t *netif = event->esp_netif;
+
+        ESP_LOGI(TAG, "Modem Connect to PPP Server");
+        ESP_LOGI(TAG, "~~~~~~~~~~~~~~");
+        ESP_LOGI(TAG, "IP          : " IPSTR, IP2STR(&event->ip_info.ip));
+        ESP_LOGI(TAG, "Netmask     : " IPSTR, IP2STR(&event->ip_info.netmask));
+        ESP_LOGI(TAG, "Gateway     : " IPSTR, IP2STR(&event->ip_info.gw));
+        esp_netif_get_dns_info(netif, 0, &dns_info);
+        ESP_LOGI(TAG, "Name Server1: " IPSTR, IP2STR(&dns_info.ip.u_addr.ip4));
+        esp_netif_get_dns_info(netif, 1, &dns_info);
+        ESP_LOGI(TAG, "Name Server2: " IPSTR, IP2STR(&dns_info.ip.u_addr.ip4));
+        ESP_LOGI(TAG, "~~~~~~~~~~~~~~");
+        xEventGroupSetBits(event_group, CONNECT_BIT);
+
+        ESP_LOGI(TAG, "GOT ip event!!!");
+    }
+    else if (event_id == IP_EVENT_PPP_LOST_IP)
+    {
+        ESP_LOGI(TAG, "Modem Disconnect from PPP Server");
+    }
+    else if (event_id == IP_EVENT_GOT_IP6)
+    {
+        ESP_LOGI(TAG, "GOT IPv6 event!");
+
+        ip_event_got_ip6_t *event = (ip_event_got_ip6_t *)event_data;
+        ESP_LOGI(TAG, "Got IPv6 address " IPV6STR, IPV62STR(event->ip6_info.ip));
+    }
+}
+
 static void mqtt_app_start(void)
 {
     esp_mqtt_client_config_t mqtt_cfg = {
@@ -339,7 +409,12 @@ static void mqtt_app_start(void)
     /* The last argument may be used to pass data to the event handler, in this example mqtt_event_handler */
     esp_mqtt_client_register_event(client, ESP_EVENT_ANY_ID, mqtt_event_handler, NULL);
     esp_mqtt_client_start(client);
+    ESP_LOGI(TAG, "Waiting for MQTT data");
 }
+
+#define MODEM_RST 5
+#define MODEM_PWKEY 4
+#define MODEM_POWER_ON 23
 
 void app_main(void)
 {
@@ -355,21 +430,158 @@ void app_main(void)
     esp_log_level_set("TRANSPORT", ESP_LOG_VERBOSE);
     esp_log_level_set("outbox", ESP_LOG_VERBOSE);
 
+    /* Init and register system/core components */
     ESP_ERROR_CHECK(nvs_flash_init());
     ESP_ERROR_CHECK(esp_netif_init());
     ESP_ERROR_CHECK(esp_event_loop_create_default());
+    ESP_ERROR_CHECK(esp_event_handler_register(IP_EVENT, ESP_EVENT_ANY_ID, &on_ip_event, NULL));
+    ESP_ERROR_CHECK(esp_event_handler_register(NETIF_PPP_STATUS, ESP_EVENT_ANY_ID, &on_ppp_changed, NULL));
+
+    gpio_config_t io_conf;
+    io_conf.intr_type = GPIO_INTR_DISABLE;
+    io_conf.mode = GPIO_MODE_OUTPUT;
+    io_conf.pin_bit_mask = (1 << MODEM_RST) | (1 << MODEM_PWKEY) | (1 << MODEM_POWER_ON);
+    io_conf.pull_down_en = 0;
+    io_conf.pull_up_en = 0;
+    gpio_config(&io_conf);
+
+    gpio_set_level(MODEM_PWKEY, 0);
+    gpio_set_level(MODEM_RST, 1);
+    gpio_set_level(MODEM_POWER_ON, 1);
+
+    vTaskDelay(15000 / portTICK_PERIOD_MS);
 
     // Synchronize time with NTP server
-    obtain_time();
+    // obtain_time();
 
     /* This helper function configures Wi-Fi or Ethernet, as selected in menuconfig.
      * Read "Establishing Wi-Fi or Ethernet Connection" section in
      * examples/protocols/README.md for more information about this function.
      */
-    ESP_ERROR_CHECK(example_connect());
+    // ESP_ERROR_CHECK(example_connect());
 
+    /* Configure the PPP netif */
+    esp_modem_dce_config_t dce_config = ESP_MODEM_DCE_DEFAULT_CONFIG(CONFIG_EXAMPLE_MODEM_PPP_APN);
+    esp_netif_config_t netif_ppp_config = ESP_NETIF_DEFAULT_PPP();
+    esp_netif_t *esp_netif = esp_netif_new(&netif_ppp_config);
+    assert(esp_netif);
+
+    event_group = xEventGroupCreate();
+
+    /* Configure the DTE */
+#if defined(CONFIG_EXAMPLE_SERIAL_CONFIG_UART)
+    esp_modem_dte_config_t dte_config = ESP_MODEM_DTE_DEFAULT_CONFIG();
+    /* setup UART specific configuration based on kconfig options */
+    dte_config.uart_config.tx_io_num = CONFIG_EXAMPLE_MODEM_UART_TX_PIN;
+    dte_config.uart_config.rx_io_num = CONFIG_EXAMPLE_MODEM_UART_RX_PIN;
+    dte_config.uart_config.rts_io_num = CONFIG_EXAMPLE_MODEM_UART_RTS_PIN;
+    dte_config.uart_config.cts_io_num = CONFIG_EXAMPLE_MODEM_UART_CTS_PIN;
+    dte_config.uart_config.flow_control = EXAMPLE_FLOW_CONTROL;
+    dte_config.uart_config.rx_buffer_size = CONFIG_EXAMPLE_MODEM_UART_RX_BUFFER_SIZE;
+    dte_config.uart_config.tx_buffer_size = CONFIG_EXAMPLE_MODEM_UART_TX_BUFFER_SIZE;
+    dte_config.uart_config.event_queue_size = CONFIG_EXAMPLE_MODEM_UART_EVENT_QUEUE_SIZE;
+    dte_config.task_stack_size = CONFIG_EXAMPLE_MODEM_UART_EVENT_TASK_STACK_SIZE;
+    dte_config.task_priority = CONFIG_EXAMPLE_MODEM_UART_EVENT_TASK_PRIORITY;
+    dte_config.dte_buffer_size = CONFIG_EXAMPLE_MODEM_UART_RX_BUFFER_SIZE / 2;
+
+#if CONFIG_EXAMPLE_MODEM_DEVICE_BG96 == 1
+    ESP_LOGI(TAG, "Initializing esp_modem for the BG96 module...");
+    esp_modem_dce_t *dce = esp_modem_new_dev(ESP_MODEM_DCE_BG96, &dte_config, &dce_config, esp_netif);
+#elif CONFIG_EXAMPLE_MODEM_DEVICE_SIM800 == 1
+    ESP_LOGI(TAG, "Initializing esp_modem for the SIM800 module...");
+    esp_modem_dce_t *dce = esp_modem_new_dev(ESP_MODEM_DCE_SIM800, &dte_config, &dce_config, esp_netif);
+#elif CONFIG_EXAMPLE_MODEM_DEVICE_SIM7000 == 1
+    ESP_LOGI(TAG, "Initializing esp_modem for the SIM7000 module...");
+    esp_modem_dce_t *dce = esp_modem_new_dev(ESP_MODEM_DCE_SIM7000, &dte_config, &dce_config, esp_netif);
+#elif CONFIG_EXAMPLE_MODEM_DEVICE_SIM7070 == 1
+    ESP_LOGI(TAG, "Initializing esp_modem for the SIM7070 module...");
+    esp_modem_dce_t *dce = esp_modem_new_dev(ESP_MODEM_DCE_SIM7070, &dte_config, &dce_config, esp_netif);
+#elif CONFIG_EXAMPLE_MODEM_DEVICE_SIM7600 == 1
+    ESP_LOGI(TAG, "Initializing esp_modem for the SIM7600 module...");
+    esp_modem_dce_t *dce = esp_modem_new_dev(ESP_MODEM_DCE_SIM7600, &dte_config, &dce_config, esp_netif);
+#elif CONFIG_EXAMPLE_MODEM_DEVICE_CUSTOM == 1
+    ESP_LOGI(TAG, "Initializing esp_modem with custom module...");
+    esp_modem_dce_t *dce = esp_modem_new_dev(ESP_MODEM_DCE_CUSTOM, &dte_config, &dce_config, esp_netif);
+#else
+    ESP_LOGI(TAG, "Initializing esp_modem for a generic module...");
+    esp_modem_dce_t *dce = esp_modem_new(&dte_config, &dce_config, esp_netif);
+#endif
+    assert(dce);
+    if (dte_config.uart_config.flow_control == ESP_MODEM_FLOW_CONTROL_HW)
+    {
+        esp_err_t err = esp_modem_set_flow_control(dce, 2, 2); // 2/2 means HW Flow Control.
+        if (err != ESP_OK)
+        {
+            ESP_LOGE(TAG, "Failed to set the set_flow_control mode");
+            return;
+        }
+        ESP_LOGI(TAG, "HW set_flow_control OK");
+    }
+
+#else
+#error Invalid serial connection to modem.
+#endif
+
+    xEventGroupClearBits(event_group, CONNECT_BIT | GOT_DATA_BIT);
+
+    /* Run the modem demo app */
+#if CONFIG_EXAMPLE_NEED_SIM_PIN == 1
+    // check if PIN needed
+    bool pin_ok = false;
+    if (esp_modem_read_pin(dce, &pin_ok) == ESP_OK && pin_ok == false)
+    {
+        if (esp_modem_set_pin(dce, CONFIG_EXAMPLE_SIM_PIN) == ESP_OK)
+        {
+            vTaskDelay(pdMS_TO_TICKS(1000));
+        }
+        else
+        {
+            abort();
+        }
+    }
+#endif
+
+    int rssi, ber;
+    esp_err_t err = esp_modem_get_signal_quality(dce, &rssi, &ber);
+    if (err != ESP_OK)
+    {
+        ESP_LOGE(TAG, "esp_modem_get_signal_quality failed with %d %s", err, esp_err_to_name(err));
+        return;
+    }
+    ESP_LOGI(TAG, "Signal quality: rssi=%d, ber=%d", rssi, ber);
+
+#ifdef CONFIG_EXAMPLE_MODEM_DEVICE_CUSTOM
+    {
+        char time[64];
+        err = esp_modem_get_time(dce, time);
+        if (err != ESP_OK)
+        {
+            ESP_LOGE(TAG, "esp_modem_get_time failed with %d %s", err, esp_err_to_name(err));
+            return;
+        }
+        ESP_LOGI(TAG, "esp_modem_get_time: %s", time);
+    }
+#endif
+
+    err = esp_modem_set_mode(dce, ESP_MODEM_MODE_DATA);
+    if (err != ESP_OK)
+    {
+        ESP_LOGE(TAG, "esp_modem_set_mode(ESP_MODEM_MODE_DATA) failed with %d", err);
+        return;
+    }
+
+    /* Wait for IP address */
+    ESP_LOGI(TAG, "Waiting for IP address");
+    xEventGroupWaitBits(event_group, CONNECT_BIT, pdFALSE, pdFALSE, portMAX_DELAY);
+
+    /* Start MQTT client */
+    ESP_LOGI(TAG, "Starting MQTT client");
     mqtt_app_start();
 
     // Create the MQTT publish task
     xTaskCreate(&mqtt_publish_task, "mqtt_publish_task", 4096, NULL, 5, NULL);
+
+    /* Wait for establishing connection */
+    ESP_LOGI(TAG, "Waiting for establishing connection");
+    xEventGroupWaitBits(event_group, GOT_DATA_BIT, pdFALSE, pdFALSE, portMAX_DELAY);
 }
